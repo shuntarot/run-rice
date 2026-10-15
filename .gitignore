@@ -5,5 +5,18 @@
 /dependencies/
 /.build/
 *.sv
+!/sim/tb.sv
 *.sv.map
 *.f
+
+# Verilator run
+/sim/obj_dir/
+/sim/sv/
+/sim/smoke.bin
+/sim/smoke.hex
+
+# Paths for this machine (see Makefile)
+/local.mk
+
+# cargo
+/target/

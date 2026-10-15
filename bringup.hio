@@ -1,6 +1,6 @@
 # rice -- hio run bringup.hio
 #
-# Hold the core in reset, put sw/smoke.elf in both memories, release it, and
+# Hold the core in reset, put asm/smoke.elf in both memories, release it, and
 # read what it wrote to dmem at 0x8000_1000.
 
 echo == identity ==
@@ -8,10 +8,9 @@ id
 
 echo == load the program while the core is held ==
 reset --hold
-write i_enable 1
-load imem sw/smoke.elf --base 0x80000000 --verify
-load dmem sw/smoke.elf --base 0x80000000 --verify
-write dmem 0x1000 0 0 0 0 0 0 0
+load imem asm/smoke.elf --verify
+load dmem asm/smoke.elf --verify
+write dmem 0x1000 0 0 0 0 0 0 0 0 0 0
 reset --release
 sleep 100
 
@@ -20,11 +19,19 @@ echo == what the core wrote ==
 read dmem 0x1000 3
 # 0xc0ffee42 (loaded from dmem), 0x000f45f6 (mul/divu), 0x44332211 (byte stores)
 read dmem 0x100c 3
+# 0x66665555 (halfword stores), then 0x12345678 twice (a store read back by
+# the very next load)
+read dmem 0x1018 3
 # counter: must differ between the two reads
-read dmem 0x1018 1
+read dmem 0x1024 1
 sleep 100
-read dmem 0x1018 1
+read dmem 0x1024 1
 
 echo == nothing out of range ==
+# Fetches out of range are counted since configuration: until the first load
+# the core runs from empty memory, traps, and fetches from 0 (mtvec out of
+# reset). The count must not grow while the program runs.
+read imem_oor
+sleep 100
 read imem_oor
 read dmem_oor

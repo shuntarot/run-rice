@@ -7,7 +7,9 @@
 //   +0x0c: a word loaded from .rodata, so it came from dmem (0xc0ffee42)
 //   +0x10: 1234 * 5678 / 7 (0x000f45f6)
 //   +0x14: four byte stores (0x44332211)
-//   +0x18: counter, incremented forever
+//   +0x18: two halfword stores (0x66665555)
+//   +0x1c: a store read back by the very next load (0x12345678), copied to +0x20
+//   +0x24: counter, incremented forever
 #define RESULT 0x80001000
 
 .section .text.start, "ax", @progbits
@@ -37,10 +39,18 @@ _start:
   sb   t1, 0x16(t0)
   li   t1, 0x44
   sb   t1, 0x17(t0)
+  li   t1, 0x5555
+  sh   t1, 0x18(t0)
+  li   t1, 0x6666
+  sh   t1, 0x1a(t0)
+  li   t1, 0x12345678
+  sw   t1, 0x1c(t0)
+  lw   t2, 0x1c(t0)
+  sw   t2, 0x20(t0)
   li   t1, 0
 1:
   addi t1, t1, 1
-  sw   t1, 0x18(t0)
+  sw   t1, 0x24(t0)
   j    1b
 
 .section .rodata

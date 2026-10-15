@@ -1,3 +1,4 @@
+-include ../local.mk
 CROSS ?= riscv64-unknown-elf-
 
 smoke.elf: smoke.S link.ld

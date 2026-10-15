@@ -3,7 +3,7 @@ name    = "run_rice"
 version = "0.1.0"
 
 [build]
-sources = ["src"]
+sources = ["rtl"]
 
 [dependencies]
 rice = { path = "../rice" }

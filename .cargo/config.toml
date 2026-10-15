@@ -1,0 +1,22 @@
+[build]
+target = "riscv32im-unknown-none-elf"
+
+[target.riscv32im-unknown-none-elf]
+# riscv-rt's link.x includes memory.x, which bsp/build.rs puts on the path.
+rustflags = ["-C", "link-arg=-Tlink.x"]
+# Loads the ELF into imem and dmem, runs it, and shows its RTT console.
+runner = "hio cpu boot"
+
+[env]
+# The harness this firmware runs on (`veryl harness gen` writes it).
+HIO_REGS = { value = "hns/regs.json", relative = true }
+
+[alias]
+# Runs the same firmware on QEMU's `virt` machine, whose RAM also starts at
+# 0x8000_0000, with A and C off as on rice. The console is its UART and the exit status ends QEMU.
+# Ctrl-A x leaves, as with `hio cpu boot`.
+run-emu = [
+  "run",
+  "--features", "rice-bsp/qemu",
+  "--config", "target.riscv32im-unknown-none-elf.runner='qemu-system-riscv32 -machine virt -cpu rv32,a=false,c=false,zawrs=false -m 128M -nographic -bios none -kernel'",
+]

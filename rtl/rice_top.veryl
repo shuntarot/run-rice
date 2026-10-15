@@ -1,16 +1,16 @@
-/// Runs `rice_core` (RV32) from two FPGA memories.
+/// Runs `rice_core` (RV32IM) from two FPGA memories.
 ///
 /// Each of the core's two buses becomes a memory port with a read latency of
-/// one cycle. Both memories cover the same addresses from `BASE`, the core's
-/// reset PC, so load the same program image into both: fetches read `imem`,
-/// loads and stores go to `dmem`. A store to `dmem` is not seen by fetches.
+/// one cycle. Both carry the core's own addresses; `dut_base` in Harness.toml
+/// places both memories at 0x8000_0000, the reset PC. Fetches read `imem`,
+/// loads and stores go to `dmem`, and a store to `dmem` is not seen by
+/// fetches.
 ///
-/// The core waits while `i_enable` is low, so the host can load the program
-/// first.
+/// The host loads the program while it holds the DUT in reset, so the core
+/// always runs.
 module rice_top (
-    i_clk   : input clock,
-    i_rst   : input reset,
-    i_enable: input logic,
+    i_clk: input clock,
+    i_rst: input reset,
 
     o_imem_addr : output logic<32>,
     o_imem_re   : output logic    ,
@@ -31,7 +31,7 @@ module rice_top (
     inst u_core: rice::rice_core::<core_pkg> (
         i_clk                ,
         i_rst                ,
-        i_enable             ,
+        i_enable   : 1'b1    ,
         inst_bus_if: inst_bus,
         data_bus_if: data_bus,
     );
@@ -77,8 +77,6 @@ module rice_mem_port (
     o_wdata: output  logic                   <32>,
     i_rdata: input   logic                   <32>,
 ) {
-    const BASE: logic<32> = 32'h8000_0000;
-
     var pending  : logic    ; // a read was taken last cycle; its data is on i_rdata
     var held     : logic    ; // the core was not ready for it; the data is in held_data
     var held_data: logic<32>;
@@ -89,8 +87,7 @@ module rice_mem_port (
         bus_if.read_data      = if held ? held_data : i_rdata;
         bus_if.error          = 0;
 
-        // An address below BASE wraps to the top and is counted out of range.
-        o_addr  = bus_if.address - BASE;
+        o_addr  = bus_if.address;
         o_re    = bus_if.read_request_ack();
         o_we    = bus_if.write_request_ack();
         o_wstrb = bus_if.strobe;

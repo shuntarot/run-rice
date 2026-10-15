@@ -4,18 +4,15 @@ module = "rice_top"
 [clock.i_clk]
 freq_mhz = 40
 
-# The core waits until the host raises it, after loading the program.
-[bundle.ctl]
-backing = "reg"
-ports   = ["i_enable"]
-
-# Both memories are 64 KB from 0x8000_0000, the core's reset PC. Load the
-# same image into both: the core fetches from imem and loads/stores to dmem.
+# Both memories are 64 KB from 0x8000_0000, the core's reset PC. The core
+# fetches from imem and loads/stores to dmem. `hio cpu boot` loads each
+# segment into every memory that covers it, and `dut_base` is how it knows.
 [bundle.imem]
 backing    = "bram_preload"
 latency    = 1
 depth      = 16384
 addressing = "byte"
+dut_base   = 0x8000_0000
 ports      = { addr = "o_imem_addr", re = "o_imem_re", rdata = "i_imem_rdata" }
 
 [bundle.dmem]
@@ -23,5 +20,6 @@ backing    = "bram"
 latency    = 1
 depth      = 16384
 addressing = "byte"
+dut_base   = 0x8000_0000
 ports      = { addr = "o_dmem_addr", re = "o_dmem_re", we = "o_dmem_we",
                wstrb = "o_dmem_wstrb", wdata = "o_dmem_wdata", rdata = "i_dmem_rdata" }
