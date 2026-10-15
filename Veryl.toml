@@ -1,0 +1,10 @@
+[project]
+name    = "run_rice"
+version = "0.1.0"
+
+[build]
+sources = ["src"]
+
+[dependencies]
+rice = { path = "../rice" }
+hns  = { git = "https://github.com/shuntarot/uharness", project = "hns", version = "0.5.0" }

@@ -1,0 +1,30 @@
+# rice -- hio run bringup.hio
+#
+# Hold the core in reset, put sw/smoke.elf in both memories, release it, and
+# read what it wrote to dmem at 0x8000_1000.
+
+echo == identity ==
+id
+
+echo == load the program while the core is held ==
+reset --hold
+write i_enable 1
+load imem sw/smoke.elf --base 0x80000000 --verify
+load dmem sw/smoke.elf --base 0x80000000 --verify
+write dmem 0x1000 0 0 0 0 0 0 0
+reset --release
+sleep 100
+
+echo == what the core wrote ==
+# 0x21534e48 ("HNS!"), misa 0x40101110 (rice sets E as a copy of I), mhartid 0
+read dmem 0x1000 3
+# 0xc0ffee42 (loaded from dmem), 0x000f45f6 (mul/divu), 0x44332211 (byte stores)
+read dmem 0x100c 3
+# counter: must differ between the two reads
+read dmem 0x1018 1
+sleep 100
+read dmem 0x1018 1
+
+echo == nothing out of range ==
+read imem_oor
+read dmem_oor

@@ -1,0 +1,115 @@
+/// Runs `rice_core` (RV32) from two FPGA memories.
+///
+/// Each of the core's two buses becomes a memory port with a read latency of
+/// one cycle. Both memories cover the same addresses from `BASE`, the core's
+/// reset PC, so load the same program image into both: fetches read `imem`,
+/// loads and stores go to `dmem`. A store to `dmem` is not seen by fetches.
+///
+/// The core waits while `i_enable` is low, so the host can load the program
+/// first.
+module rice_top (
+    i_clk   : input clock,
+    i_rst   : input reset,
+    i_enable: input logic,
+
+    o_imem_addr : output logic<32>,
+    o_imem_re   : output logic    ,
+    i_imem_rdata: input  logic<32>,
+
+    o_dmem_addr : output logic<32>,
+    o_dmem_re   : output logic    ,
+    o_dmem_we   : output logic    ,
+    o_dmem_wstrb: output logic<4> ,
+    o_dmem_wdata: output logic<32>,
+    i_dmem_rdata: input  logic<32>,
+) {
+    alias package core_pkg = rice::rice_core_pkg::<32>;
+
+    inst inst_bus: rice::rice_bus_if #( ADDRESS_WIDTH: 32, DATA_WIDTH: 32 );
+    inst data_bus: rice::rice_bus_if #( ADDRESS_WIDTH: 32, DATA_WIDTH: 32 );
+
+    inst u_core: rice::rice_core::<core_pkg> (
+        i_clk                ,
+        i_rst                ,
+        i_enable             ,
+        inst_bus_if: inst_bus,
+        data_bus_if: data_bus,
+    );
+
+    inst u_imem: rice_mem_port (
+        i_clk                ,
+        i_rst                ,
+        bus_if : inst_bus    ,
+        o_addr : o_imem_addr ,
+        o_re   : o_imem_re   ,
+        o_we   : _           ,
+        o_wstrb: _           ,
+        o_wdata: _           ,
+        i_rdata: i_imem_rdata,
+    );
+
+    inst u_dmem: rice_mem_port (
+        i_clk                ,
+        i_rst                ,
+        bus_if : data_bus    ,
+        o_addr : o_dmem_addr ,
+        o_re   : o_dmem_re   ,
+        o_we   : o_dmem_we   ,
+        o_wstrb: o_dmem_wstrb,
+        o_wdata: o_dmem_wdata,
+        i_rdata: i_dmem_rdata,
+    );
+}
+
+/// Turns a rice bus into a memory port with a read latency of one cycle.
+///
+/// Only reads get a response: the core does not wait for one on a store. If
+/// the core is not ready for a response, it is held, and no new request is
+/// taken until it is delivered, so none is lost.
+module rice_mem_port (
+    i_clk  : input   clock                       ,
+    i_rst  : input   reset                       ,
+    bus_if : modport rice::rice_bus_if::slave    ,
+    o_addr : output  logic                   <32>,
+    o_re   : output  logic                       ,
+    o_we   : output  logic                       ,
+    o_wstrb: output  logic                   <4> ,
+    o_wdata: output  logic                   <32>,
+    i_rdata: input   logic                   <32>,
+) {
+    const BASE: logic<32> = 32'h8000_0000;
+
+    var pending  : logic    ; // a read was taken last cycle; its data is on i_rdata
+    var held     : logic    ; // the core was not ready for it; the data is in held_data
+    var held_data: logic<32>;
+
+    always_comb {
+        bus_if.request_ready  = !held && (!pending || bus_if.response_ready);
+        bus_if.response_valid = pending || held;
+        bus_if.read_data      = if held ? held_data : i_rdata;
+        bus_if.error          = 0;
+
+        // An address below BASE wraps to the top and is counted out of range.
+        o_addr  = bus_if.address - BASE;
+        o_re    = bus_if.read_request_ack();
+        o_we    = bus_if.write_request_ack();
+        o_wstrb = bus_if.strobe;
+        o_wdata = bus_if.write_data;
+    }
+
+    always_ff {
+        if_reset {
+            pending   = 0;
+            held      = 0;
+            held_data = 0;
+        } else {
+            if pending && !bus_if.response_ready {
+                held      = 1;
+                held_data = i_rdata;
+            } else if held && bus_if.response_ready {
+                held = 0;
+            }
+            pending = bus_if.read_request_ack();
+        }
+    }
+}
