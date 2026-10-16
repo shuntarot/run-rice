@@ -11,7 +11,6 @@ both before the core starts.
 - Veryl, with `veryl-harness` and `hio` from veryl-harness
 - Vivado
 - An Arty A7-35 on USB
-- rice, checked out beside this directory as `../rice`
 - Rust through rustup, for the firmware (`rust-toolchain.toml` picks the target)
 - `qemu-system-riscv32`, to run the firmware without the board
 

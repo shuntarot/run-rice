@@ -6,5 +6,5 @@ version = "0.1.0"
 sources = ["rtl"]
 
 [dependencies]
-rice = { path = "../rice" }
+rice = { git = "https://github.com/shuntarot/rice", project = "rice", version = "0.1.0" }
 hns  = { git = "https://github.com/shuntarot/uharness", project = "hns", version = "0.5.0" }

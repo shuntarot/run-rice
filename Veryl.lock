@@ -17,22 +17,15 @@ revision = "178b9b4eaa4078790b9bfe45f416929034470202"
 [projects.properties]
 
 [[projects]]
-name = "hns"
-dependencies = []
+name = "rice"
 
 [projects.source]
-uuid = "6d73d90f-a7e2-5f7d-8feb-249184f2093f"
-url = "https://github.com/shuntarot/uharness"
-path = "rtl/hns"
-project = "hns"
-version = "0.5.0"
-revision = "10396b60e6d15afe246f2ffef1db9bcc0c52c3be"
-
-[projects.properties]
-
-[[projects]]
-name = "rice"
-source = "../rice"
+uuid = "3a0e7f65-1053-5cf7-a6e0-d66e41eaf597"
+url = "https://github.com/shuntarot/rice"
+path = ""
+project = "rice"
+version = "0.1.0"
+revision = "f1d069f97b9ebf59b3d296e230e1ab6f6e694d97"
 
 [projects.properties]
 
@@ -46,3 +39,17 @@ path = ""
 project = "rggen"
 version = "0.8.1"
 revision = "178b9b4eaa4078790b9bfe45f416929034470202"
+
+[[projects]]
+name = "hns"
+dependencies = []
+
+[projects.source]
+uuid = "6d73d90f-a7e2-5f7d-8feb-249184f2093f"
+url = "https://github.com/shuntarot/uharness"
+path = "rtl/hns"
+project = "hns"
+version = "0.5.0"
+revision = "10396b60e6d15afe246f2ffef1db9bcc0c52c3be"
+
+[projects.properties]
