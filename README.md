@@ -56,6 +56,7 @@ core is the DUT alone; the design adds the harness and the memory behind it
 | Target | Clock | Core LUT / FF / BRAM / DSP | Design LUT / FF / BRAM / DSP |
 |---|---|---|---|
 | `digilent/arty-a7-35` | 40 MHz | 7,004 / 9,680 / 0 / 0 | 7,488 / 10,161 / 32 / 0 |
+| `digilent/pynq-z1` | 40 MHz | 7,007 / 9,680 / 0 / 0 | 7,489 / 10,161 / 32 / 0 |
 | `xilinx/vcu118` | 40 MHz | 6,988 / 9,678 / 0 / 0 | 7,468 / 10,159 / 32 / 0 |
 
 ## Files
