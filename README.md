@@ -37,6 +37,16 @@ cargo run -p console
 cargo run-emu -p console   # the same on QEMU's virt machine
 ```
 
+riscv-tests' `isa` tests run one by one through `hio cpu boot`, each ending
+with its pass or failure code (a test that hangs times out after 60 s):
+
+```bash
+scripts/riscv-tests.sh <riscv-tests>/share/riscv-tests/isa          # the suites this core runs
+scripts/riscv-tests.sh -o results.txt <isa dir> 'rv32ui-p-*'   # or name them
+```
+
+The tests must be built for RV32 (`./configure --with-xlen=32` in riscv-tests).
+
 ## Size
 
 LUT and FF counts, block RAM in 36 Kb blocks, after place and route. The
