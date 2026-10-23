@@ -7,4 +7,4 @@ sources = ["rtl"]
 
 [dependencies]
 rice = { git = "https://github.com/shuntarot/rice", project = "rice", version = "0.1.0" }
-hns  = { git = "https://github.com/shuntarot/uharness", project = "hns", version = "0.5.0" }
+hns  = { git = "https://github.com/shuntarot/uharness", project = "hns", version = "0.6.0" }
