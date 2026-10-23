@@ -3,7 +3,7 @@
 # right after it. Fetches, loads and stores go to either. `hio cpu boot` loads
 # each segment into the memory that covers it, and `dut_base` is how it knows.
 #
-#   veryl harness gen --config Harness.mem.toml --out-dir hns_mem \
+#   veryl harness gen --config Harness.dram.toml --out-dir hns_mem \
 #       --target digilent/arty-a7-35
 [dut]
 module = "rice_mem_top"

@@ -49,14 +49,14 @@ The tests must be built for RV32 (`./configure --with-xlen=32` in riscv-tests).
 
 ## One address space, with the DRAM
 
-`Harness.mem.toml` runs the core on a second DUT, `rtl/rice_mem_top.veryl`: the
+`Harness.dram.toml` runs the core on a second DUT, `rtl/rice_mem_top.veryl`: the
 two buses are served one at a time over 64 KB of FPGA memory (`tcm`) from
 0x8000_0000 and the board's DRAM (`dmem`) right after it, as in run-hazard3.
 A program of any size fits, at the price of speed: a fetch from `tcm` takes
 two cycles, and one from the DRAM about thirty.
 
 ```bash
-veryl harness gen --config Harness.mem.toml --out-dir hns_mem --target digilent/arty-a7-35
+veryl harness gen --config Harness.dram.toml --out-dir hns_mem --target digilent/arty-a7-35
 make -C hns_mem/syn
 HIO_REGS=hns_mem/regs.json hio program
 ```
@@ -89,7 +89,7 @@ core is the DUT alone; the design adds the harness and the memory behind it
 |---|---|
 | `rtl/rice_top.veryl` | the DUT: rice with its two buses turned into memory ports |
 | `Harness.toml` | where each port goes |
-| `rtl/rice_mem_top.veryl`, `Harness.mem.toml` | the DUT with one address space over FPGA memory and the DRAM |
+| `rtl/rice_mem_top.veryl`, `Harness.dram.toml` | the DUT with one address space over FPGA memory and the DRAM |
 | `picoruby/` | mruby/c firmware: startup, RTT, HAL and a Makefile |
 | `asm/smoke.S` | the test program (`make asm`) |
 | `bsp/` | startup, console (RTT, or the UART on QEMU) and exit for the firmware |
