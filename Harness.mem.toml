@@ -1,0 +1,30 @@
+# One address space, as in run-hazard3. The 64 KB of FPGA memory from
+# 0x8000_0000, the core's reset PC, are `tcm`; the board's DRAM (`dmem`) starts
+# right after it. Fetches, loads and stores go to either. `hio cpu boot` loads
+# each segment into the memory that covers it, and `dut_base` is how it knows.
+#
+#   veryl harness gen --config Harness.mem.toml --out-dir hns_mem \
+#       --target digilent/arty-a7-35
+[dut]
+module = "rice_mem_top"
+
+[clock.i_clk]
+freq_mhz = 40
+
+[bundle.tcm]
+backing    = "bram"
+latency    = 1
+depth      = 16384
+addressing = "byte"
+dut_base   = 0x8000_0000
+ports      = { addr = "o_tcm_addr", re = "o_tcm_re", rdata = "i_tcm_rdata",
+               wdata = "o_tcm_wdata", we = "o_tcm_we", wstrb = "o_tcm_wstrb" }
+
+# 256 MB of it: all of the Arty's, and on a bigger board, as much as fits
+# below the top of the 32-bit address space.
+[bundle.dmem]
+backing  = "dram"
+aperture = "1M"
+depth    = "64M"
+dut_base = 0x8001_0000
+ports    = ["dmem"]

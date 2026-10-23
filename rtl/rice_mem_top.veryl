@@ -1,0 +1,211 @@
+/// Runs `rice_core` (RV32IM) in one address space: 64 KB of FPGA memory
+/// (`tcm`) from 0x8000_0000, the reset PC, and the board's DRAM (`dmem`)
+/// from 0x8001_0000.
+///
+/// The core has two buses, one for fetches and one for loads and stores. They
+/// are served one at a time: whichever transfer is taken runs to its end
+/// before the next is taken, and the data bus goes first when both ask. A
+/// store gets no response, as the core expects; it is taken when the memory
+/// is free and the next transfer waits for it, so a load never passes a store.
+///
+/// A fetch from `tcm` takes two cycles, one more than a memory of its own
+/// would, and one from the DRAM as long as the memory controller takes. Keep
+/// the code that runs most in `tcm`.
+module rice_mem_top (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    o_tcm_addr : output logic<32>,
+    o_tcm_re   : output logic    ,
+    o_tcm_we   : output logic    ,
+    o_tcm_wstrb: output logic<4> ,
+    o_tcm_wdata: output logic<32>,
+    i_tcm_rdata: input  logic<32>,
+
+    dmem: modport $std::axi4_if::<$std::axi4_pkg::<32, 4, 1, 1, 1, 1, 1, 1>>::master,
+) {
+    const TCM_BASE: bit<32> = 32'h8000_0000;
+    const TCM_END : bit<32> = 32'h8001_0000;
+
+    alias package core_pkg = rice::rice_core_pkg::<32>;
+
+    inst inst_bus: rice::rice_bus_if #( ADDRESS_WIDTH: 32, DATA_WIDTH: 32 );
+    inst data_bus: rice::rice_bus_if #( ADDRESS_WIDTH: 32, DATA_WIDTH: 32 );
+
+    inst u_core: rice::rice_core::<core_pkg> (
+        i_clk                ,
+        i_rst                ,
+        i_enable   : 1'b1    ,
+        inst_bus_if: inst_bus,
+        data_bus_if: data_bus,
+    );
+
+    enum mem_state: logic<3> {
+        IDLE, // nothing is open
+        T_RD, // a read of tcm was taken; its data is on i_tcm_rdata now
+        HOLD, // ... and the core was not ready for it; the data is in `held`
+        A_RD, // a read of the DRAM is open
+        A_WR, // a write to the DRAM is open
+    }
+
+    var state : mem_state;
+    var owner : logic    ; // the transfer is the data bus's
+    var held  : logic<32>;
+    var addr  : logic<32>; // of the open DRAM transfer
+    var strb  : logic<4> ;
+    var wdata : logic<32>;
+    var a_sent: logic    ; // AW or AR was accepted
+    var w_sent: logic    ; // W was accepted
+
+    var own_ready: logic    ; // the owner can take a response
+    var can_take : logic    ; // a new transfer can start
+    var pick_d   : logic    ;
+    var pick_i   : logic    ;
+    var take     : logic    ;
+    var sel_addr : logic<32>;
+    var sel_write: logic    ;
+    var sel_tcm  : logic    ;
+
+    always_comb {
+        own_ready = if owner ? data_bus.response_ready : inst_bus.response_ready;
+        can_take  = state == mem_state::IDLE || (state == mem_state::T_RD && own_ready);
+
+        pick_d = data_bus.request_valid;
+        pick_i = !data_bus.request_valid && inst_bus.request_valid;
+
+        data_bus.request_ready = can_take && pick_d;
+        inst_bus.request_ready = can_take && pick_i;
+        take                   = data_bus.request_ack() || inst_bus.request_ack();
+
+        sel_addr  = if pick_d ? data_bus.address : inst_bus.address;
+        sel_write = pick_d && data_bus.write;
+        sel_tcm   = sel_addr >= TCM_BASE && sel_addr <: TCM_END;
+
+        o_tcm_addr  = sel_addr;
+        o_tcm_re    = take && sel_tcm && !sel_write;
+        o_tcm_we    = take && sel_tcm && sel_write;
+        o_tcm_wstrb = data_bus.strobe;
+        o_tcm_wdata = data_bus.write_data;
+
+        inst_bus.error = 0;
+        data_bus.error = 0;
+
+        inst_bus.response_valid = !owner && resp_valid();
+        data_bus.response_valid = owner && resp_valid();
+        inst_bus.read_data      = resp_data();
+        data_bus.read_data      = resp_data();
+    }
+
+    function resp_valid () -> logic {
+        return state == mem_state::T_RD
+            || state == mem_state::HOLD
+            || (state == mem_state::A_RD && dmem.rvalid);
+    }
+
+    function resp_data () -> logic<32> {
+        return if state == mem_state::HOLD ? held : if state == mem_state::T_RD ? i_tcm_rdata : dmem.rdata;
+    }
+
+    always_ff {
+        if_reset {
+            state  = mem_state::IDLE;
+            owner  = 0;
+            held   = 0;
+            addr   = 0;
+            strb   = 0;
+            wdata  = 0;
+            a_sent = 0;
+            w_sent = 0;
+        } else {
+            // What happens to the open transfer.
+            case state {
+                mem_state::T_RD: {
+                    if own_ready {
+                        state = mem_state::IDLE;
+                    } else {
+                        held  = i_tcm_rdata;
+                        state = mem_state::HOLD;
+                    }
+                }
+                mem_state::HOLD: {
+                    if own_ready {
+                        state = mem_state::IDLE;
+                    }
+                }
+                mem_state::A_RD: {
+                    if dmem.araddr_ack() {
+                        a_sent = 1;
+                    }
+                    if dmem.rvalid && own_ready {
+                        state = mem_state::IDLE;
+                    }
+                }
+                mem_state::A_WR: {
+                    if dmem.awaddr_ack() {
+                        a_sent = 1;
+                    }
+                    if dmem.wdata_ack() {
+                        w_sent = 1;
+                    }
+                    if dmem.bvalid {
+                        state = mem_state::IDLE;
+                    }
+                }
+                default: {}
+            }
+
+            // A new transfer, when the memory is free.
+            if take {
+                owner = pick_d;
+                if sel_tcm {
+                    state = if sel_write ? mem_state::IDLE : mem_state::T_RD;
+                } else {
+                    addr   = sel_addr;
+                    strb   = data_bus.strobe;
+                    wdata  = data_bus.write_data;
+                    a_sent = 0;
+                    w_sent = 0;
+                    state  = if sel_write ? mem_state::A_WR : mem_state::A_RD;
+                }
+            }
+        }
+    }
+
+    always_comb {
+        dmem.awvalid  = state == mem_state::A_WR && !a_sent;
+        dmem.awaddr   = addr & ~32'h3;
+        dmem.awsize   = $std::axi4_config::axsize_variants::BYTES_PER_TRANSFER_4;
+        dmem.awburst  = $std::axi4_config::axburst_variants::INCREMENTING_BURST;
+        dmem.awcache  = 0;
+        dmem.awprot   = 0;
+        dmem.awid     = 0;
+        dmem.awlen    = 0;
+        dmem.awlock   = 0;
+        dmem.awqos    = 0;
+        dmem.awregion = 0;
+        dmem.awuser   = 0;
+
+        dmem.wvalid = state == mem_state::A_WR && !w_sent;
+        dmem.wlast  = 1;
+        dmem.wdata  = wdata;
+        dmem.wstrb  = strb;
+        dmem.wuser  = 0;
+
+        dmem.bready = 1;
+
+        dmem.arvalid  = state == mem_state::A_RD && !a_sent;
+        dmem.araddr   = addr & ~32'h3;
+        dmem.arsize   = $std::axi4_config::axsize_variants::BYTES_PER_TRANSFER_4;
+        dmem.arburst  = $std::axi4_config::axburst_variants::INCREMENTING_BURST;
+        dmem.arcache  = 0;
+        dmem.arprot   = 0;
+        dmem.arid     = 0;
+        dmem.arlen    = 0;
+        dmem.arlock   = 0;
+        dmem.arqos    = 0;
+        dmem.arregion = 0;
+        dmem.aruser   = 0;
+
+        dmem.rready = state == mem_state::A_RD && own_ready;
+    }
+}

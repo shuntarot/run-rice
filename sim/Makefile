@@ -23,7 +23,7 @@ sv.f: ../run_rice.f
 		echo sv/$$(basename $$f); \
 	done > $@
 
-../run_rice.f: ../rtl/rice_top.veryl ../Veryl.lock
+../run_rice.f: $(wildcard ../rtl/*.veryl) ../Veryl.lock
 	cd .. && veryl build
 
 smoke.hex: ../asm/smoke.elf
@@ -32,4 +32,40 @@ smoke.hex: ../asm/smoke.elf
 	print('\n'.join('%08x' % int.from_bytes(b[i:i + 4], 'little') for i in range(0, len(b), 4)))" > $@
 
 clean:
-	rm -rf obj_dir sv sv.f smoke.bin smoke.hex
+	rm -rf obj_dir obj_dir_mem obj_dir_pico sv sv.f smoke.bin smoke.hex mem_*.hex pico_*.hex pico_*.bin
+
+# make -C sim mem    runs asm/mem.elf on rice_mem_top: tcm, the DRAM, byte and
+# halfword stores, a misaligned load, and code that runs from the DRAM.
+# make -C sim pico   runs picoruby/picoruby.elf (make -C picoruby first) and
+# prints its RTT console.
+MEM_CROSS ?= riscv32-unknown-elf-
+HEXPY     = import sys; b = open(sys.argv[1], 'rb').read(); b += bytes(-len(b) % 4); \
+	print('\n'.join('%08x' % int.from_bytes(b[i:i + 4], 'little') for i in range(0, len(b), 4)))
+
+mem: obj_dir/Vtb_mem ../asm/mem_tcm.hex
+	cp ../asm/mem_tcm.hex ../asm/mem_dmem.hex .
+	obj_dir/Vtb_mem
+
+obj_dir/Vtb_mem: tb_mem.sv sv.f
+	$(VERILATOR) --binary --timing -Wno-fatal -Wno-lint -Wno-style \
+		--top-module tb --Mdir obj_dir_mem -o Vtb_mem tb_mem.sv -f sv.f
+	mkdir -p obj_dir && cp obj_dir_mem/Vtb_mem obj_dir/Vtb_mem
+
+../asm/mem_tcm.hex: ../asm/mem.S ../asm/link_mem.ld
+	$(MAKE) -C ../asm mem_tcm.hex
+
+PICO_ELF = ../picoruby/picoruby.elf
+
+pico: obj_dir/Vtb_pico $(PICO_ELF)
+	$(MEM_CROSS)objcopy -O binary -j .head -j .tcm $(PICO_ELF) pico_tcm.bin
+	$(MEM_CROSS)objcopy -O binary -j .text -j .rodata -j .data $(PICO_ELF) pico_dmem.bin
+	python3 -I -c "$(HEXPY)" pico_tcm.bin > pico_tcm.hex
+	python3 -I -c "$(HEXPY)" pico_dmem.bin > pico_dmem.hex
+	obj_dir/Vtb_pico $(PICO_ARGS) +cb=$$($(MEM_CROSS)nm $(PICO_ELF) | awk '$$3 == "_SEGGER_RTT" {print $$1}')
+
+obj_dir/Vtb_pico: tb_pico.sv sv.f
+	$(VERILATOR) --binary --timing -Wno-fatal -Wno-lint -Wno-style \
+		--top-module tb --Mdir obj_dir_pico -o Vtb_pico tb_pico.sv -f sv.f
+	mkdir -p obj_dir && cp obj_dir_pico/Vtb_pico obj_dir/Vtb_pico
+
+.PHONY: mem pico
