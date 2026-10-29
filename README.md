@@ -52,6 +52,8 @@ HIO_REGS=hns_mem/regs.json hio program
 `picoruby/` runs a Ruby script on it with mruby/c (the same firmware as
 run-hazard3's, for 40 MHz): `make -C picoruby`, then
 `HIO_REGS=hns_mem/regs.json hio cpu boot picoruby/picoruby.elf`.
+What the build needs (PicoRuby, Ruby, an RV32 toolchain):
+[doc/picoruby.md](doc/picoruby.md).
 `make -C sim mem` runs `asm/mem.S` in Verilator; `make -C sim pico` runs the
 firmware. Speed: [doc/performance.md](doc/performance.md).
 
