@@ -3,8 +3,23 @@
 Runs the [rice](https://github.com/taichi-ishitani/rice) RISC-V core (RV32IM)
 on a Digilent Arty A7-35 with
 [veryl-harness](https://github.com/shuntarot/uharness).
-Fetches read one 64 KB FPGA memory; loads and stores go to another. The host
-fills both before the core starts.
+
+The host loads a program with `hio`, and the program's console is RTT, in
+memory that the host also reads.
+
+## Address map
+
+What a program sees.
+
+| Address | Size | Region | Backed by |
+|---|---|---|---|
+| `0x8000_0000` – `0x8000_FFFF` | 64 KB | `imem`: the reset PC, and code; fetches read only this | FPGA block RAM (one cycle) |
+| `0x8000_0000` – `0x8000_FFFF` | 64 KB | `dmem`: data, the stack, the RTT console; loads and stores reach only this | FPGA block RAM (one cycle) |
+
+The two memories have the same addresses. `hio cpu boot` loads each segment
+into both, and a store is not seen by fetches. Nothing else is mapped: a read
+returns 0, a write is dropped, and `imem_oor` / `dmem_oor` count them. There
+is no I/O device. `Harness.dram.toml` has another map, with the DRAM (below).
 
 ## Requirements
 
@@ -38,10 +53,17 @@ riscv-tests: `scripts/riscv-tests.sh <riscv-tests>/share/riscv-tests/isa`
 
 ## One address space, with the DRAM
 
-`Harness.dram.toml` runs the core on `rtl/rice_mem_top.veryl`: 64 KB of FPGA
-memory (`tcm`) from 0x8000_0000 and the board's DRAM (`dmem`) after it, so a
-program of any size fits. It needs a board with a DRAM that the harness can
-reach (not the PYNQ-Z1).
+`Harness.dram.toml` runs the core on `rtl/rice_mem_top.veryl`, with one
+address space for fetches, loads and stores, so a program of any size fits.
+It needs a board with a DRAM that the harness can reach (not the PYNQ-Z1).
+
+| Address | Size | Region | Backed by |
+|---|---|---|---|
+| `0x8000_0000` – `0x8000_FFFF` | 64 KB | `tcm`: the reset PC, and code | FPGA block RAM (two cycles for a fetch) |
+| `0x8001_0000` – `0x9000_FFFF` | 256 MB | `dmem`: data, the stack, the RTT console | the board's DRAM |
+
+Nothing else is mapped: the harness refuses such an access and counts it in
+`dmem_oor`.
 
 ```bash
 veryl harness gen --config Harness.dram.toml --out-dir hns_mem --target digilent/arty-a7-35
